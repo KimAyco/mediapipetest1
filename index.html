@@ -149,6 +149,12 @@
 
 
     <input type="file" id="csvLoader" accept=".csv" />
+
+    <!-- Server URL input and prediction output -->
+    <div style="margin:20px auto; width:80%; max-width:720px;">
+        <input id="serverUrl" type="text" placeholder="https://your-render-service.onrender.com/predict" style="width:100%; padding:10px;" />
+        <div id="predictionResult" style="margin-top:10px; font-weight:bold;"></div>
+    </div>
     
     <script type="module">
         import {
@@ -187,7 +193,11 @@
             showBodyPose = poseToggle.checked;
         });
     
-        const SERVER_URL = "https://flask-tester-cx5v.onrender.com/predict"; // <-- your server endpoint
+        const SERVER_URL_DEFAULT = "https://flask-tester-cx5v.onrender.com/predict"; // change to your Render URL if different
+        const serverUrlInput = document.getElementById("serverUrl");
+        const predictionResult = document.getElementById("predictionResult");
+        serverUrlInput.value = SERVER_URL_DEFAULT;
+        const getServerUrl = () => (serverUrlInput.value || SERVER_URL_DEFAULT).trim();
     
         window.addEventListener("DOMContentLoaded", async () => {
             await initMediaPipe();
@@ -287,7 +297,7 @@
         async function sendJSONToServer(allFramesData) {
             const payload = { data: allFramesData };
             try {
-                const response = await fetch(SERVER_URL, {
+                const response = await fetch(getServerUrl(), {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json"
@@ -304,13 +314,16 @@
                 if (contentType.includes("application/json")) {
                     const parsed = JSON.parse(text);
                     console.log("✅ JSON Response:", parsed);
-                    alert("Prediction: " + JSON.stringify(parsed)); // Optional
+                    const label = parsed.prediction ?? "Unknown";
+                    const conf = parsed.confidence != null ? ` (conf: ${parsed.confidence})` : "";
+                    predictionResult.textContent = `Prediction: ${label}${conf}`;
                 } else {
                     console.warn("❌ Server did not return JSON.");
+                    predictionResult.textContent = `Server returned non-JSON response (status ${response.status}).`;
                 }
             } catch (err) {
                 console.error("❌ Error sending to server:", err.message);
-                alert("Server error: " + err.message);
+                predictionResult.textContent = `Server error: ${err.message}`;
             }
         }
     
@@ -567,3 +580,4 @@
     
 </body>
 </html>
+
