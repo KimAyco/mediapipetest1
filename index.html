@@ -177,7 +177,7 @@
         let recordedFrames = [];
         const selectedPoseIndices = [0, 1, 4, 9, 10, 11, 12, 13, 14, 15, 16];
         const shoulderIndices = [11, 12];
-        const handSelectedIndices = [0, 4, 8, 12, 16, 20];
+        const handSelectedIndices = Array.from({ length: 21 }, (_, i) => i);
         const fingertipIndices = [4, 8, 12, 16, 20];
         const fingertipColors = ["#FF5252", "#4CAF50", "#2196F3", "#FF9800", "#9C27B0"]; // thumb..pinky
         const wristColor = "#9E9E9E";
@@ -218,12 +218,25 @@
 
             const intervalId = setInterval(async () => {
                 const nowInMs = performance.now();
-                // Keep running inference to stay in sync with UI, but only record hand subset
-                await poseLandmarker.detectForVideo(video, nowInMs);
+                const poseResult = await poseLandmarker.detectForVideo(video, nowInMs);
                 const handResult = await handLandmarker.detectForVideo(video, nowInMs);
                 const row = [];
 
-                // Record only wrist and fingertip tips per hand: indices [0,4,8,12,16,20]
+                // Pose landmarks (selected indices -> 22 columns)
+                if (showBodyPose && poseResult.landmarks && poseResult.landmarks[0]) {
+                    selectedPoseIndices.forEach(i => {
+                        const l = poseResult.landmarks[0][i];
+                        if (l) {
+                            row.push(Number(l.x.toFixed(5)), Number(l.y.toFixed(5)));
+                        } else {
+                            row.push(0, 0);
+                        }
+                    });
+                } else {
+                    row.push(...Array(selectedPoseIndices.length * 2).fill(0));
+                }
+
+                // Hand landmarks: ALL 21 landmarks per hand (x,y) -> 84 columns
                 for (let h = 0; h < 2; h++) {
                     if (handResult.landmarks && handResult.landmarks[h]) {
                         handSelectedIndices.forEach(i => {
@@ -239,7 +252,7 @@
                     }
                 }
 
-                // row length is 24 (2 hands * 6 points * 2 coords)
+                // row length is 106 = 22 (pose) + 84 (hands)
                 recordedFrames.push(row);
                 framesCaptured++;
 
@@ -249,7 +262,7 @@
                     clearInterval(intervalId);
                     recording = false;
                     recordingProgress.style.display = "none";
-                    sendJSONToServer(recordedFrames); // Send 9x24 payload
+                    sendJSONToServer(recordedFrames); // Send 9x106 payload
                 }
             }, interval);
         });
@@ -489,25 +502,62 @@
                 const row = parsedFrames[frameIndex];
                 if (!row) return;
     
-                // Draw only wrist and fingertip landmarks from 9x24 CSV rows
-                let offset = 0;
-                for (let h = 0; h < 2; h++) {
-                    for (let k = 0; k < handSelectedIndices.length; k++) {
-                        const xIndex = offset + k * 2;
-                        const yIndex = offset + k * 2 + 1;
-                        if (xIndex >= row.length || yIndex >= row.length) break;
-
-                        const x = row[xIndex] * canvas.width;
-                        const y = row[yIndex] * canvas.height;
-
-                        if (row[xIndex] !== 0 || row[yIndex] !== 0) {
-                            ctx.beginPath();
-                            ctx.arc(x, y, 4, 0, 2 * Math.PI);
-                            ctx.fillStyle = k === 0 ? wristColor : fingertipColors[(k - 1) % fingertipColors.length];
-                            ctx.fill();
+                // Draw wrist + fingertips from CSV rows (supports 24 or 106 columns)
+                let F = row.length;
+                if (F === 24) {
+                    // Legacy 24: two hands, 6 points each, x,y
+                    let offset = 0;
+                    const pointsPerHand = 6;
+                    for (let h = 0; h < 2; h++) {
+                        for (let k = 0; k < pointsPerHand; k++) {
+                            const xIndex = offset + k * 2;
+                            const yIndex = offset + k * 2 + 1;
+                            if (xIndex >= row.length || yIndex >= row.length) break;
+                            const x = row[xIndex] * canvas.width;
+                            const y = row[yIndex] * canvas.height;
+                            if (row[xIndex] !== 0 || row[yIndex] !== 0) {
+                                ctx.beginPath();
+                                ctx.arc(x, y, 4, 0, 2 * Math.PI);
+                                ctx.fillStyle = k === 0 ? wristColor : fingertipColors[(k - 1) % fingertipColors.length];
+                                ctx.fill();
+                            }
                         }
+                        offset += pointsPerHand * 2;
                     }
-                    offset += handSelectedIndices.length * 2;
+                } else if (F >= 106) {
+                    // 106: 22 pose + 84 hand; draw wrist/fingertips from hand portion
+                    let offset = 22; // skip pose
+                    const numPerHand = 21;
+                    for (let h = 0; h < 2; h++) {
+                        // wrist
+                        let xIndex = offset + 0 * 2;
+                        let yIndex = xIndex + 1;
+                        if (yIndex < row.length) {
+                            const x = row[xIndex] * canvas.width;
+                            const y = row[yIndex] * canvas.height;
+                            if (row[xIndex] !== 0 || row[yIndex] !== 0) {
+                                ctx.beginPath();
+                                ctx.arc(x, y, 4, 0, 2 * Math.PI);
+                                ctx.fillStyle = wristColor;
+                                ctx.fill();
+                            }
+                        }
+                        // fingertips
+                        fingertipIndices.forEach((idx, tipIdx) => {
+                            const xi = offset + idx * 2;
+                            const yi = xi + 1;
+                            if (yi >= row.length) return;
+                            const x = row[xi] * canvas.width;
+                            const y = row[yi] * canvas.height;
+                            if (row[xi] !== 0 || row[yi] !== 0) {
+                                ctx.beginPath();
+                                ctx.arc(x, y, 4, 0, 2 * Math.PI);
+                                ctx.fillStyle = fingertipColors[tipIdx % fingertipColors.length];
+                                ctx.fill();
+                            }
+                        });
+                        offset += numPerHand * 2;
+                    }
                 }
     
                 frameIndex++;
