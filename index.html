@@ -13,8 +13,8 @@
         .layout { display: flex; gap: 12px; max-width: 960px; margin: 12px auto; align-items: flex-start; }
         .leftPane { flex: 0 0 auto; }
         .rightPane { flex: 1 1 0; }
-        .videoView { position: relative; width: 420px; height: 420px; margin: 0; background:#000; }
-        video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+        .videoView { position: relative; width: 600px; height: 400px; margin: 0; background:#000; }
+        video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
         canvas { pointer-events: none; }
         #controls { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; align-items: center; }
         #serverBox { max-width: 960px; margin: 8px auto; }
@@ -111,6 +111,7 @@
         const ctx = canvas.getContext("2d");
         const drawingUtils = new DrawingUtils(ctx);
         const distanceStatus = document.getElementById("distanceStatus");
+        const videoView = document.querySelector(".videoView");
 
         const startButton = document.getElementById("startButton");
         const recordButton = document.getElementById("recordButton");
@@ -324,6 +325,11 @@
                 video.addEventListener("loadeddata", () => {
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
+                    if (videoView) {
+                        const scale = 0.7; // 70% of old_colector_v2 sizing
+                        videoView.style.width = Math.round(video.videoWidth * scale) + "px";
+                        videoView.style.height = Math.round(video.videoHeight * scale) + "px";
+                    }
                     webcamRunning = true;
                     recordButton.disabled = !isLandscape();
                     requestAnimationFrame(predictWebcam);
