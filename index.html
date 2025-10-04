@@ -10,10 +10,13 @@
         :root { --ok:#2e7d32; --warn:#b71c1c; --bg:#f8f9fa; }
         body { font-family: Roboto, sans-serif; margin: 0; padding: 16px; color: #333; background: var(--bg); }
         h1 { color: #007f8b; margin: 0 0 12px; text-align: center; }
-        .videoView { position: relative; width: 480px; height: 320px; margin: 12px auto; background:#000; }
+        .layout { display: flex; gap: 12px; max-width: 960px; margin: 12px auto; align-items: flex-start; }
+        .leftPane { flex: 0 0 auto; }
+        .rightPane { flex: 1 1 0; }
+        .videoView { position: relative; width: 336px; height: 224px; margin: 0; background:#000; }
         video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
         canvas { pointer-events: none; }
-        #controls { max-width: 960px; margin: 8px auto; display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; align-items: center; }
+        #controls { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; align-items: center; }
         #serverBox { max-width: 960px; margin: 8px auto; }
         #recordingProgress { width: 100%; height: 16px; -webkit-appearance: none; appearance: none; display: none; }
         #recordingProgress::-webkit-progress-bar { background-color: #eee; border-radius: 8px; }
@@ -24,8 +27,7 @@
         #distanceStatus { text-align:center; font-weight: 700; margin: 8px auto; }
         .inline { display: inline-flex; gap: 6px; align-items: center; }
         @media (max-width: 900px) {
-            #controls { grid-template-columns: repeat(2, minmax(0,1fr)); }
-            .videoView { width: 480px; height: 320px; }
+            #controls { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -39,12 +41,38 @@
 
     <h1>Pose and Hand Sender (Landscape) - mobile_v</h1>
 
-    <div class="videoView">
-        <video id="webcam" autoplay playsinline muted></video>
-        <canvas id="output_canvas"></canvas>
+    <div class="layout">
+        <div class="leftPane">
+            <div class="videoView">
+                <video id="webcam" autoplay playsinline muted></video>
+                <canvas id="output_canvas"></canvas>
+            </div>
+        </div>
+        <div class="rightPane">
+            <div id="controls">
+                <button id="startButton" class="mdc-button mdc-button--raised"><span class="mdc-button__label">Start</span></button>
+                <button id="recordButton" class="mdc-button mdc-button--outlined" disabled><span class="mdc-button__label">Record</span></button>
+                <button id="switchCam" class="mdc-button mdc-button--outlined"><span class="mdc-button__label">Use Front Camera</span></button>
+
+                <div class="inline">
+                    <label class="inline"><input id="poseToggle" type="checkbox" checked /> Show Body Pose</label>
+                </div>
+                <div class="inline">
+                    <label>Total frames:</label>
+                    <input id="totalFrames" type="number" min="1" step="1" value="9" style="width:70px;"/>
+                </div>
+                <div class="inline">
+                    <label>Frame gap (ms):</label>
+                    <input id="frameGap" type="number" min="10" step="10" value="50" style="width:80px;"/>
+                </div>
+            </div>
+        </div>
     </div>
 
-    <div id="controls">
+    <div style="max-width:960px; margin: 0 auto;">
+        <progress id="recordingProgress" value="0" max="100"></progress>
+        <div id="distanceStatus"></div>
+    </div>
         <button id="startButton" class="mdc-button mdc-button--raised"><span class="mdc-button__label">Start</span></button>
         <button id="recordButton" class="mdc-button mdc-button--outlined" disabled><span class="mdc-button__label">Record</span></button>
         <button id="switchCam" class="mdc-button mdc-button--outlined"><span class="mdc-button__label">Use Front Camera</span></button>
@@ -324,13 +352,14 @@
 
             if (handResult.landmarks) {
                 for (const hand of handResult.landmarks) {
-                    const wrist = hand[0];
-                    if (wrist) { const x = wrist.x * canvas.width, y = wrist.y * canvas.height; ctx.beginPath(); ctx.arc(x, y, 4, 0, 2*Math.PI); ctx.fillStyle = wristColor; ctx.fill(); }
-                    fingertipIndices.forEach((idx, tipIdx) => {
-                        const lm = hand[idx]; if (!lm) return;
-                        const x = lm.x * canvas.width, y = lm.y * canvas.height;
-                        ctx.beginPath(); ctx.arc(x, y, 4, 0, 2*Math.PI); ctx.fillStyle = fingertipColors[tipIdx % fingertipColors.length]; ctx.fill();
-                    });
+                    // Draw full landmarks with connectors
+                    drawingUtils.drawLandmarks(hand, { color: "#00B0FF", lineWidth: 2 });
+                    try {
+                        // HandLandmarker exposes HAND_CONNECTIONS in some builds; guard it
+                        if (HandLandmarker.HAND_CONNECTIONS) {
+                            drawingUtils.drawConnectors(hand, HandLandmarker.HAND_CONNECTIONS, { color: "#00E5FF", lineWidth: 2 });
+                        }
+                    } catch {}
                 }
             }
 
