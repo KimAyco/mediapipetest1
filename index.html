@@ -2,108 +2,103 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-    <title>Sender (Mobile/Desktop Landscape) - mobile_v</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Pose & Hand Detection with Distance - V2 Auto Capture</title>
     <link href="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.css" rel="stylesheet">
     <script src="https://unpkg.com/material-components-web@latest/dist/material-components-web.min.js"></script>
     <style>
-        :root { --ok:#2e7d32; --warn:#b71c1c; --bg:#f8f9fa; }
-        body { font-family: Roboto, sans-serif; margin: 0; padding: 16px; color: #333; background: var(--bg); }
-        h1 { color: #007f8b; margin: 0 0 12px; text-align: center; }
-        .layout { display: flex; gap: 12px; max-width: 960px; margin: 12px auto; align-items: flex-start; }
-        .leftPane { flex: 0 0 auto; }
-        .rightPane { flex: 1 1 0; }
-        .videoView { position: relative; width: 336px; height: 224px; margin: 0; background:#000; }
+        body { font-family: Roboto, sans-serif; margin: 2em; color: #333; background-color: #f8f9fa; text-align: center; }
+        h1 { color: #007f8b; margin-bottom: 1em; }
+        .videoView { position: relative; width: 600px; height: 400px; margin: auto; }
         video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
         canvas { pointer-events: none; }
-        #controls { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; align-items: center; }
-        #serverBox { max-width: 960px; margin: 8px auto; }
-        #recordingProgress { width: 100%; height: 16px; -webkit-appearance: none; appearance: none; display: none; }
-        #recordingProgress::-webkit-progress-bar { background-color: #eee; border-radius: 8px; }
-        #recordingProgress::-webkit-progress-value { background-color: #007f8b; border-radius: 8px; }
-        #recordingProgress::-moz-progress-bar { background-color: #007f8b; border-radius: 8px; }
-        #orientationOverlay { position: fixed; inset: 0; background: rgba(183,28,28,0.9); color:#fff; display:none; align-items:center; justify-content:center; text-align:center; padding: 24px; z-index: 9999; }
-        #orientationOverlay .box { max-width: 520px; }
-        #distanceStatus { text-align:center; font-weight: 700; margin: 8px auto; }
-        .inline { display: inline-flex; gap: 6px; align-items: center; }
-        @media (max-width: 900px) {
-            #controls { grid-template-columns: 1fr; }
-        }
+        button, input[type="file"], #distanceStatus, #recordingProgress { display: block; margin: 12px auto; }
+        .mdc-linear-progress { width: 60%; margin: auto; }
+        #controls { width: 90%; max-width: 840px; margin: 10px auto 20px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; align-items: center; }
+        #folderStatus { font-size: 0.95em; color: #555; }
+        .inline { display: inline-block; margin: 0 6px; }
+        #prediction { margin-top: 8px; font-weight: bold; }
+        #recordingProgress { width: 80%; height: 20px; -webkit-appearance: none; appearance: none; display: none; }
+        #recordingProgress::-webkit-progress-bar { background-color: #eee; border-radius: 10px; }
+        #recordingProgress::-webkit-progress-value { background-color: #007f8b; border-radius: 10px; }
+        #recordingProgress::-moz-progress-bar { background-color: #007f8b; border-radius: 10px; }
     </style>
+    <!-- Note: Uses the same landmark capture format as old_colector.html (22 pose + 84 hand = 106 columns) -->
 </head>
 <body>
-    <div id="orientationOverlay">
-        <div class="box">
-            <h2 style="margin:0 0 8px;">Please rotate your device</h2>
-            <p>This page works only in landscape on mobile. Rotate to continue.</p>
-        </div>
-    </div>
+    <h1>Pose and Hand Detection with Distance — V2 (Auto Capture)</h1>
 
-    <h1>Pose and Hand Sender (Landscape) - mobile_v</h1>
-
-    <div class="layout">
-        <div class="leftPane">
-            <div class="videoView">
-                <video id="webcam" autoplay playsinline muted></video>
-                <canvas id="output_canvas"></canvas>
+    <div id="loadingContainer">
+        <div id="loadingText">Loading MediaPipe models, please wait...</div>
+        <div role="progressbar" class="mdc-linear-progress mdc-linear-progress--indeterminate" id="loadingBar">
+            <div class="mdc-linear-progress__buffer">
+                <div class="mdc-linear-progress__buffer-bar"></div>
+                <div class="mdc-linear-progress__buffer-dots"></div>
             </div>
-        </div>
-        <div class="rightPane">
-            <div id="controls">
-                <button id="startButton" class="mdc-button mdc-button--raised"><span class="mdc-button__label">Start</span></button>
-                <button id="recordButton" class="mdc-button mdc-button--outlined" disabled><span class="mdc-button__label">Record</span></button>
-                <button id="switchCam" class="mdc-button mdc-button--outlined"><span class="mdc-button__label">Use Front Camera</span></button>
-
-                <div class="inline">
-                    <label class="inline"><input id="poseToggle" type="checkbox" checked /> Show Body Pose</label>
-                </div>
-                <div class="inline">
-                    <label>Total frames:</label>
-                    <input id="totalFrames" type="number" min="1" step="1" value="9" style="width:70px;"/>
-                </div>
-                <div class="inline">
-                    <label>Frame gap (ms):</label>
-                    <input id="frameGap" type="number" min="10" step="10" value="50" style="width:80px;"/>
-                </div>
+            <div class="mdc-linear-progress__bar mdc-linear-progress__primary-bar">
+                <span class="mdc-linear-progress__bar-inner"></span>
+            </div>
+            <div class="mdc-linear-progress__bar mdc-linear-progress__secondary-bar">
+                <span class="mdc-linear-progress__bar-inner"></span>
             </div>
         </div>
     </div>
 
-    <div style="max-width:960px; margin: 0 auto;">
-        <progress id="recordingProgress" value="0" max="100"></progress>
-        <div id="distanceStatus"></div>
+    <div id="captureAlert" style="display:none; position:sticky; top:0; z-index:10; background:#ffe2e2; color:#7a0000; border:2px solid #ff5a5a; padding:10px 14px; margin:-10px auto 10px; max-width:840px; border-radius:8px; font-weight:700;">
+        ⚠️ Auto-capture paused: please adjust your distance.
     </div>
-        <button id="startButton" class="mdc-button mdc-button--raised"><span class="mdc-button__label">Start</span></button>
-        <button id="recordButton" class="mdc-button mdc-button--outlined" disabled><span class="mdc-button__label">Record</span></button>
-        <button id="switchCam" class="mdc-button mdc-button--outlined"><span class="mdc-button__label">Use Front Camera</span></button>
+    <div class="videoView">
+        <video id="webcam" autoplay playsinline></video>
+        <canvas id="output_canvas"></canvas>
+    </div>
+
+    <div id="controls">
+        <button id="startButton" class="mdc-button mdc-button--raised"><span class="mdc-button__label">Start Detection</span></button>
+        <button id="playButton" class="mdc-button mdc-button--outlined"><span class="mdc-button__label">Play</span></button>
+        <button id="stopButton" class="mdc-button mdc-button--outlined" disabled><span class="mdc-button__label">Stop</span></button>
 
         <div class="inline">
-            <label class="inline"><input id="poseToggle" type="checkbox" checked /> Show Body Pose</label>
+            <label for="captureIntervalSec">Capture every (sec):</label>
+            <input id="captureIntervalSec" type="number" min="0.2" step="0.1" value="1" style="width:90px;" />
         </div>
         <div class="inline">
-            <label>Total frames:</label>
-            <input id="totalFrames" type="number" min="1" step="1" value="9" style="width:70px;"/>
+            <label for="framesPerClip">Frames/clip:</label>
+            <input id="framesPerClip" type="number" min="1" step="1" value="9" style="width:70px;" />
         </div>
         <div class="inline">
-            <label>Frame gap (ms):</label>
-            <input id="frameGap" type="number" min="10" step="10" value="50" style="width:80px;"/>
+            <label for="frameIntervalMs">Frame gap (ms):</label>
+            <input id="frameIntervalMs" type="number" min="10" step="10" value="200" style="width:90px;" />
         </div>
+        <div class="inline">
+            <label for="maxClips">Stop after clips (0 = unlimited):</label>
+            <input id="maxClips" type="number" min="0" step="1" value="0" style="width:120px;" />
+        </div>
+        <div class="inline">
+            <label><input id="pauseNoHands" type="checkbox" checked /> Pause if hands < required</label>
+        </div>
+        <div class="inline">
+            <label for="requiredHands">Required hands:</label>
+            <select id="requiredHands" style="padding:6px;">
+                <option value="1" selected>1</option>
+                <option value="2">2</option>
+            </select>
+        </div>
+
+        <button id="chooseFolder" class="mdc-button mdc-button--outlined"><span class="mdc-button__label">Choose Output Folder</span></button>
+        <div id="folderStatus">No folder selected.</div>
     </div>
 
     <progress id="recordingProgress" value="0" max="100"></progress>
+    <div id="progressStatus" style="margin-top:6px; font-weight:600; color:#444;"></div>
     <div id="distanceStatus"></div>
-
-    <div id="serverBox">
-        <input id="serverUrl" type="text" placeholder="https://your-render-service.onrender.com/predict" style="width:100%; padding:10px;" />
-        <div id="predictionResult" style="margin-top:10px; font-weight:bold;"></div>
-    </div>
 
     <script type="module">
         import {
             FilesetResolver,
             DrawingUtils,
             PoseLandmarker,
-            HandLandmarker
+            HandLandmarker,
+            FaceLandmarker
         } from "https://cdn.skypack.dev/@mediapipe/tasks-vision@0.10.0";
 
         const video = document.getElementById("webcam");
@@ -112,151 +107,292 @@
         const drawingUtils = new DrawingUtils(ctx);
         const distanceStatus = document.getElementById("distanceStatus");
 
+        const loadingContainer = document.getElementById("loadingContainer");
         const startButton = document.getElementById("startButton");
-        const recordButton = document.getElementById("recordButton");
-        const switchCamButton = document.getElementById("switchCam");
-        const poseToggle = document.getElementById("poseToggle");
-        const totalFramesInput = document.getElementById("totalFrames");
-        const frameGapInput = document.getElementById("frameGap");
+        const playButton = document.getElementById("playButton");
+        const stopButton = document.getElementById("stopButton");
+        const captureIntervalSecInput = document.getElementById("captureIntervalSec");
+        const framesPerClipInput = document.getElementById("framesPerClip");
+        const frameIntervalMsInput = document.getElementById("frameIntervalMs");
+        const maxClipsInput = document.getElementById("maxClips");
+        const pauseNoHandsToggle = document.getElementById("pauseNoHands");
+        const requiredHandsSelect = document.getElementById("requiredHands");
+        const chooseFolderBtn = document.getElementById("chooseFolder");
+        const folderStatus = document.getElementById("folderStatus");
         const recordingProgress = document.getElementById("recordingProgress");
-        const orientationOverlay = document.getElementById("orientationOverlay");
+        const progressStatus = document.getElementById("progressStatus");
+        const captureAlert = document.getElementById("captureAlert");
+        let originalBgColor = '';
 
-        const serverUrlInput = document.getElementById("serverUrl");
-        const predictionResult = document.getElementById("predictionResult");
-        const SERVER_URL_DEFAULT = "https://flask-tester-cx5v.onrender.com/predict";
-        serverUrlInput.value = SERVER_URL_DEFAULT;
-        const getServerUrl = () => (serverUrlInput.value || SERVER_URL_DEFAULT).trim();
-
-        let poseLandmarker, handLandmarker;
+        let poseLandmarker, handLandmarker, faceLandmarker;
         let webcamRunning = false;
-        let recording = false;
-        let recordedFrames = [];
-        let useFront = false;
+        let autoTimerId = null;
+        let inProgressCapture = false;
+        let outputDirHandle = null; // File System Access API folder handle
+        let savedCount = 0;
+        let sessionSaved = 0; // number of clips saved in current auto-capture session
 
         const selectedPoseIndices = [0, 1, 4, 9, 10, 11, 12, 13, 14, 15, 16];
         const fingertipIndices = [4, 8, 12, 16, 20];
-        const handSelectedIndices = Array.from({ length: 21 }, (_, i) => i);
-        const fingertipColors = ["#FF5252", "#4CAF50", "#2196F3", "#FF9800", "#9C27B0"]; // thumb..pinky
         const wristColor = "#9E9E9E";
-        let showBodyPose = true;
 
-        poseToggle.addEventListener("change", () => { showBodyPose = poseToggle.checked; });
-        switchCamButton.addEventListener("click", async () => {
-            useFront = !useFront;
-            switchCamButton.textContent = useFront ? "Use Rear Camera" : "Use Front Camera";
-            if (webcamRunning) await enableWebcam(true);
-        });
-
-        function isLandscape() {
-            const mq = window.matchMedia && window.matchMedia("(orientation: landscape)");
-            return (mq && mq.matches) || (window.innerWidth > window.innerHeight);
+        // Smoothing helpers
+        let prevPoseLandmarks = null;
+        let prevFaceLandmarks = null;
+        const SMOOTH_ALPHA = 0.6;
+        function smoothLandmarks(prev, current) {
+            if (!prev || prev.length !== current.length) return current;
+            return current.map((c, i) => ({
+                x: prev[i].x * SMOOTH_ALPHA + c.x * (1 - SMOOTH_ALPHA),
+                y: prev[i].y * SMOOTH_ALPHA + c.y * (1 - SMOOTH_ALPHA),
+                z: (prev[i].z ?? 0) * SMOOTH_ALPHA + (c.z ?? 0) * (1 - SMOOTH_ALPHA),
+                index: c.index
+            }));
         }
 
-        function updateOrientationUI() {
-            const ok = isLandscape();
-            orientationOverlay.style.display = ok ? "none" : "flex";
-            // Allow Start to request permission even in portrait; we still block recording when not landscape
-            startButton.disabled = false;
-            recordButton.disabled = !ok || !webcamRunning;
-        }
-
-        window.addEventListener("orientationchange", updateOrientationUI);
-        window.addEventListener("resize", updateOrientationUI);
+        // Track latest distance status
+        let lastDistanceStatus = "";
 
         window.addEventListener("DOMContentLoaded", async () => {
-            updateOrientationUI();
             await initMediaPipe();
+            loadingContainer.style.display = "none";
+            startButton.style.display = "inline-block";
+            playButton.style.display = "inline-block";
+            stopButton.style.display = "inline-block";
+            // remember original body background
+            originalBgColor = getComputedStyle(document.body).backgroundColor;
         });
+
+        function setAlertBG(isAlert) {
+            if (isAlert) {
+                document.body.style.backgroundColor = "#ffe2e2"; // light red
+            } else {
+                document.body.style.backgroundColor = originalBgColor || "#f8f9fa";
+            }
+        }
 
         startButton.addEventListener("click", async () => {
             if (webcamRunning) return;
-            await enableWebcam(false);
+            webcamRunning = true;
+            await enableWebcam();
         });
 
-        recordButton.addEventListener("click", async () => {
-            if (recording) return;
-            recording = true;
-            recordedFrames = [];
+        chooseFolderBtn.addEventListener("click", async () => {
+            try {
+                // Requires Chrome/Edge + secure context
+                outputDirHandle = await window.showDirectoryPicker();
+                savedCount = await countCsvInDir(outputDirHandle);
+                folderStatus.textContent = `Folder: ${outputDirHandle.name} — ${savedCount} CSV files`;
+            } catch (e) {
+                console.warn("Directory selection cancelled or not supported.", e);
+                folderStatus.textContent = `No folder selected.`;
+                outputDirHandle = null;
+            }
+        });
 
-            const totalFrames = Math.max(1, parseInt(totalFramesInput.value || "9", 10));
-            const interval = Math.max(10, parseInt(frameGapInput.value || "50", 10));
+        playButton.addEventListener("click", () => {
+            if (autoTimerId) return; // already running
+            const periodMs = Math.max(200, Math.floor(parseFloat(captureIntervalSecInput.value || "1") * 1000));
+            sessionSaved = 0; // reset session counter on new run
+            autoTimerId = setInterval(captureOnce, periodMs);
+            playButton.disabled = true;
+            stopButton.disabled = false;
+        });
 
+        stopButton.addEventListener("click", () => {
+            if (autoTimerId) {
+                clearInterval(autoTimerId);
+                autoTimerId = null;
+            }
+            playButton.disabled = false;
+            stopButton.disabled = true;
+        });
+
+        async function captureOnce() {
+            // Pause capture if distance is not perfect
+            if (lastDistanceStatus !== "Perfect distance") {
+                if (autoTimerId) {
+                    captureAlert.style.display = "block";
+                    captureAlert.textContent = lastDistanceStatus && lastDistanceStatus !== "No pose detected"
+                        ? `⚠️ Auto-capture paused: ${lastDistanceStatus}.`
+                        : "⚠️ Auto-capture paused: please align to camera.";
+                    progressStatus.textContent = captureAlert.textContent;
+                    progressStatus.style.color = "#7a0000";
+                    setAlertBG(true);
+                }
+                return;
+            } else {
+                captureAlert.style.display = "none";
+                progressStatus.textContent = "Capturing...";
+                progressStatus.style.color = "#2e7d32";
+                setAlertBG(false);
+            }
+            if (inProgressCapture) return;
+            inProgressCapture = true;
+
+            const totalFrames = Math.max(1, parseInt(framesPerClipInput.value || "9", 10));
+            const frameGap = Math.max(10, parseInt(frameIntervalMsInput.value || "200", 10));
+            const recordedRows = [];
+
+            // show progress
             recordingProgress.style.display = "block";
             recordingProgress.value = 0;
             recordingProgress.max = totalFrames;
 
             let framesCaptured = 0;
-            const intervalId = setInterval(async () => {
-                if (!isLandscape()) return; // don't capture in portrait
+            await new Promise(resolve => {
+                const id = setInterval(async () => {
+                    // If user moves out of range mid-clip, pause this tick (do not advance)
+                    if (lastDistanceStatus !== "Perfect distance") {
+                        captureAlert.style.display = "block";
+                        captureAlert.textContent = lastDistanceStatus && lastDistanceStatus !== "No pose detected"
+                            ? `⚠️ Auto-capture paused: ${lastDistanceStatus}.`
+                            : "⚠️ Auto-capture paused: please align to camera.";
+                        progressStatus.textContent = captureAlert.textContent;
+                        progressStatus.style.color = "#7a0000";
+                        setAlertBG(true);
+                        return; // skip recording this tick
+                    } else {
+                        captureAlert.style.display = "none";
+                        progressStatus.textContent = "Capturing...";
+                        progressStatus.style.color = "#2e7d32";
+                        setAlertBG(false);
+                    }
+                    const nowInMs = performance.now();
+                    const poseResult = await poseLandmarker.detectForVideo(video, nowInMs);
+                    const handResult = await handLandmarker.detectForVideo(video, nowInMs);
 
-                const nowInMs = performance.now();
-                const poseResult = showBodyPose ? await poseLandmarker.detectForVideo(video, nowInMs) : { landmarks: null };
-                const handResult = await handLandmarker.detectForVideo(video, nowInMs);
-                const row = [];
+                    // Optional pause if detected hands below required
+                    if (pauseNoHandsToggle.checked) {
+                        const requiredHands = Math.max(1, Math.min(2, parseInt(requiredHandsSelect.value || "1", 10)));
+                        let detectedHands = 0;
+                        if (handResult && Array.isArray(handResult.landmarks)) {
+                            for (const h of handResult.landmarks) {
+                                if (Array.isArray(h) && h.some(lm => !!lm)) detectedHands++;
+                            }
+                        }
+                        if (detectedHands < requiredHands) {
+                            captureAlert.style.display = "block";
+                            captureAlert.textContent = `⚠️ Auto-capture paused: need ${requiredHands} hand(s), detected ${detectedHands}.`;
+                            progressStatus.textContent = captureAlert.textContent;
+                            progressStatus.style.color = "#7a0000";
+                            setAlertBG(true);
+                            return; // skip this tick
+                        }
+                    }
+                    const row = [];
 
-                // Pose: 22 columns
-                if (showBodyPose && poseResult.landmarks && poseResult.landmarks[0]) {
-                    selectedPoseIndices.forEach(i => {
-                        const l = poseResult.landmarks[0][i];
-                        row.push(l ? Number(l.x.toFixed(5)) : 0, l ? Number(l.y.toFixed(5)) : 0);
-                    });
-                } else {
-                    row.push(...Array(selectedPoseIndices.length * 2).fill(0));
-                }
-
-                // Hands: 84 columns (2 hands × 21 × x,y)
-                for (let h = 0; h < 2; h++) {
-                    if (handResult.landmarks && handResult.landmarks[h]) {
-                        handSelectedIndices.forEach(i => {
-                            const l = handResult.landmarks[h][i];
-                            row.push(l ? Number(l.x.toFixed(5)) : 0, l ? Number(l.y.toFixed(5)) : 0);
+                    // Pose (22 columns)
+                    if (poseResult.landmarks && poseResult.landmarks[0]) {
+                        selectedPoseIndices.forEach(i => {
+                            const l = poseResult.landmarks[0][i];
+                            if (l) { row.push(Number(l.x.toFixed(5)), Number(l.y.toFixed(5))); }
+                            else { row.push(0, 0); }
                         });
                     } else {
-                        row.push(...Array(handSelectedIndices.length * 2).fill(0));
+                        row.push(...Array(selectedPoseIndices.length * 2).fill(0));
+                    }
+
+                    // Hands (84 columns = 2 hands × 21 × (x,y))
+                    for (let h = 0; h < 2; h++) {
+                        if (handResult.landmarks && handResult.landmarks[h]) {
+                            for (let i = 0; i < 21; i++) {
+                                const l = handResult.landmarks[h][i];
+                                if (l) { row.push(Number(l.x.toFixed(5)), Number(l.y.toFixed(5))); }
+                                else { row.push(0, 0); }
+                            }
+                        } else {
+                            row.push(...Array(21 * 2).fill(0));
+                        }
+                    }
+
+                    recordedRows.push(row.join(","));
+                    framesCaptured++;
+                    recordingProgress.value = framesCaptured;
+
+                    if (framesCaptured >= totalFrames) {
+                        clearInterval(id);
+                        resolve();
+                    }
+                }, frameGap);
+            });
+
+            // Save CSV to folder or download
+            try {
+                const header = [];
+                selectedPoseIndices.forEach(i => { header.push(`pose_${i}_x`, `pose_${i}_y`); });
+                for (let h = 0; h < 2; h++) {
+                    for (let i = 0; i < 21; i++) { header.push(`hand${h}_${i}_x`, `hand${h}_${i}_y`); }
+                }
+                const csvContent = [header.join(","), ...recordedRows].join("\n");
+
+                const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+                const filename = `landmarks_recording_${timestamp}.csv`;
+                const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+
+                if (outputDirHandle) {
+                    const fileHandle = await outputDirHandle.getFileHandle(filename, { create: true });
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(blob);
+                    await writable.close();
+                    savedCount += 1;
+                    folderStatus.textContent = `Folder: ${outputDirHandle.name} — ${savedCount} CSV files`;
+                } else {
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement("a");
+                    link.setAttribute("href", url);
+                    link.setAttribute("download", filename);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    URL.revokeObjectURL(url);
+                }
+                // Session-level stopping after N clips
+                sessionSaved += 1;
+                const maxClips = Math.max(0, parseInt(maxClipsInput.value || "0", 10));
+                if (maxClips > 0 && sessionSaved >= maxClips) {
+                    if (autoTimerId) {
+                        clearInterval(autoTimerId);
+                        autoTimerId = null;
+                        playButton.disabled = false;
+                        stopButton.disabled = true;
+                        captureAlert.style.display = "none";
+                        setAlertBG(false);
+                        progressStatus.textContent = `Target reached: captured ${sessionSaved}/${maxClips} clips.`;
+                        progressStatus.style.color = "#2e7d32";
                     }
                 }
+            } catch (err) {
+                console.error("Failed to save CSV:", err);
+                progressStatus.textContent = "Save failed. Check console.";
+                progressStatus.style.color = "#7a0000";
+            }
 
-                recordedFrames.push(row);
-                framesCaptured++;
-                recordingProgress.value = framesCaptured;
+            recordingProgress.style.display = "none";
+            if (lastDistanceStatus === "Perfect distance") {
+                progressStatus.textContent = "Clip saved.";
+                progressStatus.style.color = "#2e7d32";
+            }
+            inProgressCapture = false;
+        }
 
-                if (framesCaptured >= totalFrames) {
-                    clearInterval(intervalId);
-                    recording = false;
-                    recordingProgress.style.display = "none";
-                    sendJSONToServer(recordedFrames);
-                }
-            }, interval);
-        });
-
-        async function sendJSONToServer(allFramesData) {
-            const payload = { data: allFramesData };
-            predictionResult.textContent = "";
+        async function countCsvInDir(dirHandle) {
+            let count = 0;
             try {
-                const response = await fetch(getServerUrl(), {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload)
-                });
-                const contentType = response.headers.get("Content-Type") || "";
-                const text = await response.text();
-                if (contentType.includes("application/json")) {
-                    const parsed = JSON.parse(text);
-                    const label = parsed.prediction ?? "Unknown";
-                    const conf = parsed.confidence != null ? ` (conf: ${parsed.confidence})` : "";
-                    predictionResult.textContent = `Prediction: ${label}${conf}`;
-                } else {
-                    predictionResult.textContent = `Server returned non-JSON (status ${response.status}).`;
+                for await (const entry of dirHandle.values()) {
+                    if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.csv')) count++;
                 }
             } catch (e) {
-                predictionResult.textContent = `Server error: ${e.message}`;
+                // ignore
             }
+            return count;
         }
 
         async function initMediaPipe() {
             const vision = await FilesetResolver.forVisionTasks(
                 "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm"
             );
+
             poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
                 baseOptions: {
                     modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
@@ -265,6 +401,7 @@
                 runningMode: "VIDEO",
                 numPoses: 1
             });
+
             handLandmarker = await HandLandmarker.createFromOptions(vision, {
                 baseOptions: {
                     modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
@@ -273,97 +410,111 @@
                 runningMode: "VIDEO",
                 numHands: 2
             });
+
+            faceLandmarker = await FaceLandmarker.createFromOptions(vision, {
+                baseOptions: {
+                    modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task",
+                    delegate: "GPU"
+                },
+                runningMode: "VIDEO",
+                numFaces: 1
+            });
         }
 
-        async function enableWebcam(restart) {
-            try {
-                const constraints = {
-                    audio: false,
-                    video: {
-                        facingMode: useFront ? { ideal: "user" } : { ideal: "environment" },
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 },
-                        frameRate: { ideal: 30 }
-                    }
-                };
-                if (restart && video.srcObject) {
-                    const streamOld = video.srcObject; streamOld.getTracks().forEach(t => t.stop());
-                }
-                let stream;
-                try {
-                    stream = await navigator.mediaDevices.getUserMedia(constraints);
-                } catch (e1) {
-                    // Fallback: basic request
-                    try {
-                        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-                    } catch (e2) {
-                        // Fallback: explicit facingMode without ideals
-                        const fm = useFront ? "user" : "environment";
-                        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: fm }, audio: false });
-                    }
-                }
-                video.srcObject = stream;
-                video.addEventListener("loadeddata", () => {
-                    canvas.width = video.videoWidth;
-                    canvas.height = video.videoHeight;
-                    webcamRunning = true;
-                    recordButton.disabled = !isLandscape();
-                    requestAnimationFrame(predictWebcam);
-                }, { once: true });
-            } catch (e) {
-                console.error("getUserMedia failed:", e);
-                const secure = window.isSecureContext;
-                const hint = secure ? "Check site camera permission in browser settings (allow camera)." : "This page must be served over HTTPS or localhost for camera access.";
-                alert("Camera access failed: " + e.message + "\n\n" + hint);
-            }
+        async function enableWebcam() {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+            video.addEventListener("loadeddata", () => {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const videoView = document.querySelector('.videoView');
+                videoView.style.width = video.videoWidth + 'px';
+                videoView.style.height = video.videoHeight + 'px';
+                predictWebcam();
+            });
         }
 
-        function detectDistance(poseLandmarks, vw) {
+        function detectDistance(poseLandmarks, videoWidth) {
             if (!poseLandmarks || poseLandmarks.length === 0) return "No pose detected";
-            const left = poseLandmarks.find(lm => lm.index === 11);
-            const right = poseLandmarks.find(lm => lm.index === 12);
-            if (!left || !right) return "Shoulders not detected";
-            const shoulderWidthRelative = Math.abs(right.x * vw - left.x * vw) / vw;
-            const targetWidthRelative = 0.45, tol = 0.05;
-            if (shoulderWidthRelative > targetWidthRelative + tol) return "Too close";
-            if (shoulderWidthRelative < targetWidthRelative - tol) return "Too far";
-            return "Perfect distance";
+            const leftShoulderObj = poseLandmarks.find(lm => lm.index === 11);
+            const rightShoulderObj = poseLandmarks.find(lm => lm.index === 12);
+            if (!leftShoulderObj || !rightShoulderObj) return "Shoulders not detected";
+            const shoulderWidthPixels = Math.abs(rightShoulderObj.x * videoWidth - leftShoulderObj.x * videoWidth);
+            const shoulderWidthRelative = shoulderWidthPixels / videoWidth;
+            const targetWidthRelative = 0.45;
+            const tolerance = 0.05;
+            if (shoulderWidthRelative > targetWidthRelative + tolerance) return "Too close";
+            else if (shoulderWidthRelative < targetWidthRelative - tolerance) return "Too far";
+            else return "Perfect distance";
         }
 
         async function predictWebcam() {
-            if (!webcamRunning) return;
             const nowInMs = performance.now();
-            const poseResult = showBodyPose ? await poseLandmarker.detectForVideo(video, nowInMs) : { landmarks: null };
+            const poseResult = await poseLandmarker.detectForVideo(video, nowInMs);
+            const faceResult = await faceLandmarker.detectForVideo(video, nowInMs);
             const handResult = await handLandmarker.detectForVideo(video, nowInMs);
 
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            if (showBodyPose && poseResult.landmarks && poseResult.landmarks[0]) {
-                const allPoseLandmarks = poseResult.landmarks[0].map((landmark, index) => ({ ...landmark, index }));
-                const filtered = selectedPoseIndices.map(i => allPoseLandmarks.find(lm => lm.index === i)).filter(Boolean);
+            if (poseResult.landmarks && poseResult.landmarks[0]) {
+                let allPoseLandmarks = poseResult.landmarks[0].map((landmark, index) => ({ ...landmark, index }));
+                allPoseLandmarks = smoothLandmarks(prevPoseLandmarks, allPoseLandmarks);
+                prevPoseLandmarks = allPoseLandmarks;
+                const filtered = selectedPoseIndices
+                    .map(i => allPoseLandmarks.find(lm => lm.index === i))
+                    .filter(Boolean);
                 drawingUtils.drawLandmarks(filtered, { color: "#00FF00", lineWidth: 2 });
-                const distTxt = detectDistance(allPoseLandmarks, video.videoWidth);
-                distanceStatus.textContent = distTxt;
-                distanceStatus.style.color = distTxt === "Perfect distance" ? "var(--ok)" : (distTxt === "Too far" ? "#fb8c00" : "var(--warn)");
+                filtered.forEach((landmark) => {
+                    const x = landmark.x * canvas.width;
+                    const y = landmark.y * canvas.height;
+                    ctx.fillStyle = "#FFFFFF";
+                    ctx.font = "12px Arial";
+                    ctx.fillText(`P${landmark.index}`, x + 5, y - 5);
+                });
+                const distanceStatusText = detectDistance(allPoseLandmarks, video.videoWidth);
+                lastDistanceStatus = distanceStatusText;
+                distanceStatus.textContent = distanceStatusText;
+                distanceStatus.style.color = distanceStatusText === "Perfect distance" ? "green" : (distanceStatusText === "Too close" ? "red" : "orange");
             } else {
-                distanceStatus.textContent = showBodyPose ? "No pose detected" : "";
+                lastDistanceStatus = "No pose detected";
+                distanceStatus.textContent = "No pose detected";
                 distanceStatus.style.color = "#2196f3";
+            }
+
+            if (faceResult.landmarks && faceResult.landmarks[0]) {
+                let faceLms = faceResult.landmarks[0].map((lm, idx) => ({ x: lm.x, y: lm.y, z: lm.z, index: idx }));
+                faceLms = smoothLandmarks(prevFaceLandmarks, faceLms);
+                prevFaceLandmarks = faceLms;
+                const keyIdx = [1, 33, 263, 61, 291];
+                keyIdx.forEach((fi, k) => {
+                    const lm = faceLms[fi]; if (!lm) return;
+                    const x = lm.x * canvas.width; const y = lm.y * canvas.height;
+                    ctx.beginPath(); ctx.arc(x, y, 4, 0, 2 * Math.PI);
+                    ctx.fillStyle = ["#FFD54F", "#4CAF50", "#4CAF50", "#E91E63", "#E91E63"][k] || "#FFD54F";
+                    ctx.fill();
+                });
             }
 
             if (handResult.landmarks) {
                 for (const hand of handResult.landmarks) {
-                    // Draw full landmarks with connectors
-                    drawingUtils.drawLandmarks(hand, { color: "#00B0FF", lineWidth: 2 });
-                    try {
-                        // HandLandmarker exposes HAND_CONNECTIONS in some builds; guard it
-                        if (HandLandmarker.HAND_CONNECTIONS) {
-                            drawingUtils.drawConnectors(hand, HandLandmarker.HAND_CONNECTIONS, { color: "#00E5FF", lineWidth: 2 });
-                        }
-                    } catch {}
+                    // Draw wrist + fingertips
+                    const wrist = hand[0];
+                    if (wrist) {
+                        const x = wrist.x * canvas.width; const y = wrist.y * canvas.height;
+                        ctx.beginPath(); ctx.arc(x, y, 4, 0, 2 * Math.PI);
+                        ctx.fillStyle = wristColor; ctx.fill();
+                    }
+                    fingertipIndices.forEach((idx, tipIdx) => {
+                        const lm = hand[idx]; if (!lm) return;
+                        const x = lm.x * canvas.width; const y = lm.y * canvas.height;
+                        ctx.beginPath(); ctx.arc(x, y, 4, 0, 2 * Math.PI);
+                        ctx.fillStyle = ["#FF5252", "#4CAF50", "#2196F3", "#FF9800", "#9C27B0"][tipIdx % 5];
+                        ctx.fill();
+                    });
                 }
             }
 
-            requestAnimationFrame(predictWebcam);
+            if (webcamRunning) window.requestAnimationFrame(predictWebcam);
         }
     </script>
 </body>
