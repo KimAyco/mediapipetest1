@@ -299,10 +299,7 @@
                 const constraints = {
                     audio: false,
                     video: {
-                        facingMode: useFront ? { ideal: "user" } : { ideal: "environment" },
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 },
-                        frameRate: { ideal: 30 }
+                        facingMode: useFront ? { ideal: "user" } : { ideal: "environment" }
                     }
                 };
                 if (restart && video.srcObject) {
@@ -326,9 +323,8 @@
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
                     if (videoView) {
-                        const scale = 0.7; // 70% of old_colector_v2 sizing
-                        videoView.style.width = Math.round(video.videoWidth * scale) + "px";
-                        videoView.style.height = Math.round(video.videoHeight * scale) + "px";
+                        videoView.style.width = video.videoWidth + "px";
+                        videoView.style.height = video.videoHeight + "px";
                     }
                     webcamRunning = true;
                     recordButton.disabled = !isLandscape();
