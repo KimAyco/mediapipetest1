@@ -10,7 +10,7 @@
         :root { --ok:#2e7d32; --warn:#b71c1c; --bg:#f8f9fa; }
         body { font-family: Roboto, sans-serif; margin: 0; padding: 16px; color: #333; background: var(--bg); }
         h1 { color: #007f8b; margin: 0 0 12px; text-align: center; }
-        .videoView { position: relative; width: 100%; max-width: 960px; margin: 12px auto; aspect-ratio: 16 / 9; background:#000; }
+        .videoView { position: relative; width: 600px; height: 400px; margin: 12px auto; background:#000; }
         video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
         canvas { pointer-events: none; }
         #controls { max-width: 960px; margin: 8px auto; display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; align-items: center; }
@@ -25,8 +25,6 @@
         .inline { display: inline-flex; gap: 6px; align-items: center; }
         @media (max-width: 900px) {
             #controls { grid-template-columns: repeat(2, minmax(0,1fr)); }
-            /* Make camera window ~60% smaller on mobile landscape */
-            .videoView { max-width: 40vw; }
         }
     </style>
 </head>
