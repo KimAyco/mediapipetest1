@@ -24,6 +24,10 @@
         #distanceStatus { text-align:center; font-weight: 700; margin: 8px auto; }
         .inline { display: inline-flex; gap: 6px; align-items: center; }
         @media (max-width: 900px) { #controls { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+        /* Make camera window smaller on mobile */
+        @media (max-width: 600px) {
+            .videoView { width: 85vw; max-width: 85vw; }
+        }
     </style>
 </head>
 <body>
