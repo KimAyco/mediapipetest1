@@ -10,7 +10,8 @@
         :root { --ok:#2e7d32; --warn:#b71c1c; --bg:#f8f9fa; }
         body { font-family: Roboto, sans-serif; margin: 0; padding: 16px; color: #333; background: var(--bg); }
         h1 { color: #007f8b; margin: 0 0 12px; text-align: center; }
-        .videoView { position: relative; width: 600px; height: 400px; margin: 12px auto; background:#000; }
+        /* Match old_colector_v2.html width (600px) but 50% smaller → 300x200 */
+        .videoView { position: relative; width: 300px; height: 200px; margin: 12px auto; background:#000; }
         video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
         canvas { pointer-events: none; }
         #controls { max-width: 960px; margin: 8px auto; display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; align-items: center; }
