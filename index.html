@@ -13,8 +13,8 @@
         .layout { display: flex; gap: 12px; max-width: 960px; margin: 12px auto; align-items: flex-start; }
         .leftPane { flex: 0 0 auto; }
         .rightPane { flex: 1 1 0; }
-        .videoView { position: relative; width: 600px; height: 400px; margin: 0; background:#000; }
-        video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .videoView { position: relative; width: 420px; height: 420px; margin: 0; background:#000; }
+        video, canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
         canvas { pointer-events: none; }
         #controls { width: 100%; display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; align-items: center; }
         #serverBox { max-width: 960px; margin: 8px auto; }
@@ -125,7 +125,12 @@
         const predictionResult = document.getElementById("predictionResult");
         const SERVER_URL_DEFAULT = "https://flask-tester-cx5v.onrender.com/predict";
         serverUrlInput.value = SERVER_URL_DEFAULT;
-        const getServerUrl = () => (serverUrlInput.value || SERVER_URL_DEFAULT).trim();
+        const getServerUrl = () => {
+            let url = (serverUrlInput.value || SERVER_URL_DEFAULT).trim();
+            if (url.endsWith('/')) url = url.slice(0, -1);
+            if (!/\/predict$/i.test(url)) url = url + '/predict';
+            return url;
+        };
 
         let poseLandmarker, handLandmarker;
         let webcamRunning = false;
@@ -231,15 +236,23 @@
 
         async function sendJSONToServer(allFramesData) {
             const payload = { data: allFramesData };
+            const url = getServerUrl();
             predictionResult.textContent = "";
+            console.log('[sender] POST', url, 'frames:', allFramesData.length, 'shape per frame:', allFramesData[0]?.length);
+            const ctrl = new AbortController();
+            const t = setTimeout(() => ctrl.abort(), 20000); // 20s timeout
             try {
-                const response = await fetch(getServerUrl(), {
+                const response = await fetch(url, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(payload),
+                    signal: ctrl.signal
                 });
+                clearTimeout(t);
                 const contentType = response.headers.get("Content-Type") || "";
                 const text = await response.text();
+                console.log('[sender] status:', response.status, 'content-type:', contentType);
+                console.log('[sender] raw response:', text);
                 if (contentType.includes("application/json")) {
                     const parsed = JSON.parse(text);
                     const label = parsed.prediction ?? "Unknown";
@@ -249,7 +262,12 @@
                     predictionResult.textContent = `Server returned non-JSON (status ${response.status}).`;
                 }
             } catch (e) {
-                predictionResult.textContent = `Server error: ${e.message}`;
+                clearTimeout(t);
+                console.error('[sender] fetch error:', e);
+                const hint = (location.protocol === 'https:' && getServerUrl().startsWith('http:'))
+                    ? ' Mixed content blocked: serve your API over HTTPS.'
+                    : '';
+                predictionResult.textContent = `Server error: ${e.message}${hint ? ' —' + hint : ''}`;
             }
         }
 
