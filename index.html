@@ -132,6 +132,24 @@
             if (!/\/predict$/i.test(url)) url = url + '/predict';
             return url;
         };
+        const getServerBaseUrl = () => getServerUrl().replace(/\/predict$/i, "");
+        let serverWarmed = false;
+
+        async function warmServer() {
+            if (serverWarmed) return;
+            const baseUrl = getServerBaseUrl();
+            const ctrl = new AbortController();
+            const t = setTimeout(() => ctrl.abort(), 15000);
+            try {
+                predictionResult.textContent = "Waking server...";
+                await fetch(baseUrl, { method: "GET", signal: ctrl.signal, mode: "cors" });
+                serverWarmed = true;
+            } catch (e) {
+                // ignore warmup errors; we'll try POST anyway
+            } finally {
+                clearTimeout(t);
+            }
+        }
 
         let poseLandmarker, handLandmarker;
         let webcamRunning = false;
@@ -240,35 +258,55 @@
             const url = getServerUrl();
             predictionResult.textContent = "";
             console.log('[sender] POST', url, 'frames:', allFramesData.length, 'shape per frame:', allFramesData[0]?.length);
-            const ctrl = new AbortController();
-            const t = setTimeout(() => ctrl.abort(), 20000); // 20s timeout
-            try {
-                const response = await fetch(url, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload),
-                    signal: ctrl.signal
-                });
-                clearTimeout(t);
-                const contentType = response.headers.get("Content-Type") || "";
-                const text = await response.text();
-                console.log('[sender] status:', response.status, 'content-type:', contentType);
-                console.log('[sender] raw response:', text);
-                if (contentType.includes("application/json")) {
-                    const parsed = JSON.parse(text);
-                    const label = parsed.prediction ?? "Unknown";
-                    const conf = parsed.confidence != null ? ` (conf: ${parsed.confidence})` : "";
-                    predictionResult.textContent = `Prediction: ${label}${conf}`;
-                } else {
-                    predictionResult.textContent = `Server returned non-JSON (status ${response.status}).`;
+
+            // Warm up Render server to mitigate cold starts
+            await warmServer();
+
+            let attempt = 0;
+            const maxAttempts = 2; // initial + one retry on timeout
+            while (attempt < maxAttempts) {
+                attempt++;
+                const ctrl = new AbortController();
+                // Extend timeout to handle cold starts and model load
+                const timeoutMs = attempt === 1 ? 60000 : 90000; // 60s first, 90s on retry
+                const t = setTimeout(() => ctrl.abort(), timeoutMs);
+                try {
+                    const response = await fetch(url, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(payload),
+                        signal: ctrl.signal
+                    });
+                    clearTimeout(t);
+                    const contentType = response.headers.get("Content-Type") || "";
+                    const text = await response.text();
+                    console.log('[sender] status:', response.status, 'content-type:', contentType);
+                    console.log('[sender] raw response:', text);
+                    if (contentType.includes("application/json")) {
+                        const parsed = JSON.parse(text);
+                        const label = parsed.prediction ?? "Unknown";
+                        const conf = parsed.confidence != null ? ` (conf: ${parsed.confidence})` : "";
+                        predictionResult.textContent = `Prediction: ${label}${conf}`;
+                    } else {
+                        predictionResult.textContent = `Server returned non-JSON (status ${response.status}).`;
+                    }
+                    return; // success
+                } catch (e) {
+                    clearTimeout(t);
+                    console.error('[sender] fetch error attempt', attempt, e);
+                    const isAbort = e && (e.name === 'AbortError' || /aborted/i.test(String(e)));
+                    if (isAbort && attempt < maxAttempts) {
+                        predictionResult.textContent = 'Server is waking up, retrying...';
+                        // brief delay before retry
+                        await new Promise(r => setTimeout(r, 2000));
+                        continue;
+                    }
+                    const hint = (location.protocol === 'https:' && getServerUrl().startsWith('http:'))
+                        ? ' Mixed content blocked: serve your API over HTTPS.'
+                        : '';
+                    predictionResult.textContent = `Server error: ${e.message}${hint ? ' —' + hint : ''}`;
+                    return;
                 }
-            } catch (e) {
-                clearTimeout(t);
-                console.error('[sender] fetch error:', e);
-                const hint = (location.protocol === 'https:' && getServerUrl().startsWith('http:'))
-                    ? ' Mixed content blocked: serve your API over HTTPS.'
-                    : '';
-                predictionResult.textContent = `Server error: ${e.message}${hint ? ' —' + hint : ''}`;
             }
         }
 
